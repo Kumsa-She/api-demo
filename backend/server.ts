@@ -2,7 +2,8 @@ import http from 'http';
 import express, { Request, Response } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import database from './config/db';
+import rateLimit from 'express-rate-limit';
+import database, { healthCheck } from './config/db';
 
 dotenv.config();
 
@@ -11,67 +12,107 @@ const port = Number(process.env.PORT) || 3000;
 
 app.use(cors());
 app.use(express.json());
+app.use(
+  rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 100,
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+  }),
+);
 
 app.get('/', (req: Request, res: Response) => {
   res.json({ success: true, message: 'Backend is running successfully', port });
 });
 
+app.get('/health', async (req: Request, res: Response) => {
+  const healthy = await healthCheck();
+  res
+    .status(healthy ? 200 : 503)
+    .json({ status: healthy ? 'ok' : 'unhealthy' });
+});
+
 let server: http.Server | null = null;
+let isShuttingDown = false;
+let shutdownPromise: Promise<void> | null = null;
+
+const shutdown = (code: number): Promise<void> => {
+  if (shutdownPromise) {
+    return shutdownPromise;
+  }
+
+  isShuttingDown = true;
+  shutdownPromise = new Promise<void>((resolve) => {
+    const closeServer = (): void => {
+      if (!server || !server.listening) {
+        resolve();
+        return;
+      }
+
+      server.close((error) => {
+        if (error) {
+          console.log('HTTP server close failed', error);
+        }
+        resolve();
+      });
+    };
+
+    closeServer();
+  }).then(async () => {
+    try {
+      await database.disconnect();
+    } catch (error) {
+      console.log('MongoDB disconnect failed', error);
+      process.exitCode = 1;
+    }
+
+    process.exitCode = code;
+  });
+
+  setTimeout(() => {
+    if (isShuttingDown) {
+      console.log('Shutdown timeout reached');
+      process.exit(1);
+    }
+  }, 10000).unref();
+
+  return shutdownPromise;
+};
 
 async function startServer(): Promise<http.Server> {
   await database.connectToDatabase();
-
   server = http.createServer(app);
 
   await new Promise<void>((resolve, reject) => {
-    server!.listen(port);
-    server!.once('listening', () => {
-      console.log(`Server running on http://localhost:${port}`);
-      resolve();
-    });
-    server!.once('error', (err) => reject(err));
+    server!.once('error', reject);
+    server!.listen(port, resolve);
   });
 
-  const shutdown = async (code = 0): Promise<void> => {
-    console.log('Shutting down server...');
-
-    if (server) {
-      await new Promise<void>((resolve) => {
-        server!.close((err) => {
-          if (err) console.error('Error closing server:', err);
-          resolve();
-        });
-      });
-    }
-
-    try {
-      await database.disconnect();
-    } catch (err) {
-      console.error('Error during DB disconnect:', err);
-    }
-
-    process.exit(code);
-  };
-
-  const handleFatalError = (err: any): void => {
-    console.error('Fatal error, shutting down:', err);
-    void shutdown(1);
-  };
-
-  process.on('SIGINT', () => void shutdown(0));
-  process.on('SIGTERM', () => void shutdown(0));
-  process.on('uncaughtException', handleFatalError);
-  process.on('unhandledRejection', (reason) => handleFatalError(reason));
-
+  console.log(`Server running on http://localhost:${port}`);
   return server;
 }
 
-export { app, startServer };
+process.on('SIGINT', () => {
+  void shutdown(0);
+});
+process.on('SIGTERM', () => {
+  void shutdown(0);
+});
+process.on('uncaughtException', (error) => {
+  console.log('Uncaught exception', error);
+  void shutdown(1);
+});
+process.on('unhandledRejection', (reason) => {
+  console.log('Unhandled rejection', reason);
+  void shutdown(1);
+});
+
+export { app, startServer, shutdown };
 
 if (require.main === module) {
-  void startServer().catch(async (err) => {
-    console.error('Failed to start server:', err);
-    await database.disconnect().catch(() => {});
-    process.exit(1);
+  void startServer().catch(async (error) => {
+    console.log('Failed to start server', error);
+    await database.disconnect().catch(() => undefined);
+    process.exitCode = 1;
   });
 }

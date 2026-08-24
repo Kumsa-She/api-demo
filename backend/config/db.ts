@@ -3,145 +3,132 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const DATABASE_URL = process.env.DATABASE_URL;
+const DATABASE_URL = process.env.DATABASE_URL ?? '';
 
 if (!DATABASE_URL) {
-  throw new Error('DATABASE_URL is not defined in the .env file.');
+  throw new Error('DATABASE_URL is required.');
 }
 
-let client: MongoClient | null = null;
-let db: Db | null = null;
-let connectionPromise: Promise<MongoClient> | null = null;
+const parsePoolSize = (value: string | undefined, fallback: number): number => {
+  const poolSize = value ? Number(value) : fallback;
+  return Number.isInteger(poolSize) && poolSize > 0 ? poolSize : fallback;
+};
 
-// Pool and timeout settings tuned for higher concurrency.
 const mongoOptions: MongoClientOptions = {
-  // Increase pool size to allow more concurrent operations per process.
-  maxPoolSize: process.env.MONGO_MAX_POOL_SIZE
-    ? Number(process.env.MONGO_MAX_POOL_SIZE)
-    : 200,
-  minPoolSize: process.env.MONGO_MIN_POOL_SIZE
-    ? Number(process.env.MONGO_MIN_POOL_SIZE)
-    : 10,
-  // How long to wait for a connection to become available from the pool
+  maxPoolSize: 200,
+  minPoolSize: parsePoolSize(process.env.MONGO_MIN_POOL_SIZE, 10),
   waitQueueTimeoutMS: 5000,
-  // Keep sockets alive to reduce churn
-  socketTimeoutMS: 45000,
   connectTimeoutMS: 10000,
   serverSelectionTimeoutMS: 5000,
+  socketTimeoutMS: 45000,
   maxIdleTimeMS: 300000,
   retryWrites: true,
-  // use TLS by default for secure connections
   tls: true,
   appName: 'api-demo-backend',
 };
 
-const createMongoClient = (): MongoClient => {
-  const client = new MongoClient(DATABASE_URL, mongoOptions);
+class Database {
+  private client: MongoClient | null = null;
+  private db: Db | null = null;
+  private connectionPromise: Promise<Db> | null = null;
 
-  // Basic connection pool events for observability in production logs.
+  async connect(): Promise<Db> {
+    if (this.db) {
+      return this.db;
+    }
 
-  try {
-    client.on('connectionPoolCreated', (evt) => {
-      console.info('MongoDB pool created', evt);
-    });
-    client.on('connectionCreated', (evt) => {});
-    client.on('connectionClosed', (evt) => {
-      console.info('MongoDB connection closed', evt);
-    });
-    client.on('connectionCheckOutStarted', () => {
-      // fired when an operation starts to wait for a connection
-    });
-  } catch (e) {
-    // If the driver doesn't support an event in a specific version, ignore.
+    if (!this.connectionPromise) {
+      this.connectionPromise = this.connectWithRetry().catch((error) => {
+        this.connectionPromise = null;
+        throw error;
+      });
+    }
+
+    return this.connectionPromise;
   }
 
-  return client;
-};
-
-export async function connectToDatabase(): Promise<Db> {
-  if (db) {
-    return db;
+  connectToDatabase(): Promise<Db> {
+    return this.connect();
   }
 
-  if (!connectionPromise) {
-    connectionPromise = (async () => {
-      let attempt = 0;
+  private async connectWithRetry(): Promise<Db> {
+    const maxAttempts = 5;
 
-      while (attempt < 5) {
-        try {
-          const mongoClient = createMongoClient();
-          await mongoClient.connect();
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      const client = new MongoClient(DATABASE_URL, mongoOptions);
 
-          client = mongoClient;
-          db = mongoClient.db();
+      try {
+        await client.connect();
+        this.client = client;
+        this.db = client.db();
+        console.log('MongoDB connected successfully');
+        return this.db;
+      } catch (error) {
+        await client.close().catch(() => undefined);
+        console.log(
+          `MongoDB connection attempt ${attempt}/${maxAttempts} failed`,
+          error,
+        );
 
-          console.log('MongoDB connected successfully');
-          return mongoClient;
-        } catch (error) {
-          attempt += 1;
-          const delayMs = Math.min(1000 * attempt * 2, 10000);
-
-          console.error(
-            `MongoDB connection attempt ${attempt}/5 failed:`,
-            error,
-          );
-
-          if (attempt >= 5) {
-            throw new Error('MongoDB connection failed after multiple retries');
-          }
-
-          await new Promise((resolve) => setTimeout(resolve, delayMs));
+        if (attempt === maxAttempts) {
+          throw new Error('MongoDB connection failed after multiple retries');
         }
+
+        await new Promise((resolve) =>
+          setTimeout(resolve, Math.min(attempt * 2000, 10000)),
+        );
       }
+    }
 
-      throw new Error('MongoDB connection failed unexpectedly');
-    })();
+    throw new Error('MongoDB connection failed unexpectedly');
   }
 
-  await connectionPromise;
+  async healthCheck(): Promise<boolean> {
+    if (!this.db) {
+      return false;
+    }
 
-  if (!db) {
-    throw new Error('MongoDB database instance is not available');
+    try {
+      await this.db.command({ ping: 1 });
+      return true;
+    } catch (error) {
+      console.log('MongoDB health check failed', error);
+      return false;
+    }
   }
 
-  return db;
+  async disconnect(): Promise<void> {
+    if (this.connectionPromise && !this.db) {
+      await this.connectionPromise.catch(() => undefined);
+    }
+
+    const client = this.client;
+    this.client = null;
+    this.db = null;
+    this.connectionPromise = null;
+
+    if (client) {
+      await client.close();
+      console.log('MongoDB disconnected successfully');
+    }
+  }
+
+  getClient(): MongoClient | null {
+    return this.client;
+  }
+
+  getDb(): Db | null {
+    return this.db;
+  }
 }
 
-export async function disconnect(): Promise<void> {
-  if (!client) {
-    return;
-  }
+const database = new Database();
 
-  try {
-    await client.close();
-    console.log('MongoDB disconnected successfully');
-  } finally {
-    client = null;
-    db = null;
-    connectionPromise = null;
-  }
-}
+export const connectToDatabase = (): Promise<Db> => database.connect();
+export const healthCheck = (): Promise<boolean> => database.healthCheck();
+export const disconnect = (): Promise<void> => database.disconnect();
+export const getClient = (): MongoClient | null => database.getClient();
+export const getDb = (): Db | null => database.getDb();
 
-const gracefulShutdown = async (signal: string): Promise<void> => {
-  console.log(`Received ${signal}. Shutting down MongoDB connection...`);
-
-  await disconnect();
-  process.exit(0);
-};
-
-process.on('SIGINT', () => {
-  void gracefulShutdown('SIGINT');
-});
-
-process.on('SIGTERM', () => {
-  void gracefulShutdown('SIGTERM');
-});
-
-const database = {
-  connectToDatabase,
-  disconnect,
-  getClient: () => client,
-  getDb: () => db,
-};
-
+export { Database };
 export default database;
