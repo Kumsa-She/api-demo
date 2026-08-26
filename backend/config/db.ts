@@ -11,6 +11,7 @@ if (!DATABASE_URL) {
 
 const parsePoolSize = (value: string | undefined, fallback: number): number => {
   const poolSize = value ? Number(value) : fallback;
+  // Keep invalid settings from breaking startup.
   return Number.isInteger(poolSize) && poolSize > 0 ? poolSize : fallback;
 };
 
@@ -33,12 +34,15 @@ class Database {
   private connectionPromise: Promise<Db> | null = null;
 
   async connect(): Promise<Db> {
+    // Reuse an existing connection.
     if (this.db) {
       return this.db;
     }
 
     if (!this.connectionPromise) {
+      // Share concurrent connection attempts.
       this.connectionPromise = this.connectWithRetry().catch((error) => {
+        // Allow future calls to retry.
         this.connectionPromise = null;
         throw error;
       });
@@ -59,11 +63,13 @@ class Database {
 
       try {
         await client.connect();
+        // Publish only fully connected state.
         this.client = client;
         this.db = client.db();
         console.log('MongoDB connected successfully');
         return this.db;
       } catch (error) {
+        // Release failed clients before retrying.
         await client.close().catch(() => undefined);
         console.log(
           `MongoDB connection attempt ${attempt}/${maxAttempts} failed`,
@@ -84,6 +90,7 @@ class Database {
   }
 
   async healthCheck(): Promise<boolean> {
+    // Do not create a connection just to check health.
     if (!this.db) {
       return false;
     }
@@ -98,6 +105,7 @@ class Database {
   }
 
   async disconnect(): Promise<void> {
+    // Wait for late connection resources.
     if (this.connectionPromise && !this.db) {
       await this.connectionPromise.catch(() => undefined);
     }
