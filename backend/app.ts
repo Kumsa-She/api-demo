@@ -3,6 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import rateLimit from 'express-rate-limit';
 import { healthCheck } from './config/db';
+import productRouter from './routes/product.routes';
 
 dotenv.config();
 
@@ -19,6 +20,7 @@ app.use(
     legacyHeaders: false,
   }),
 );
+app.use('/api/products', productRouter);
 
 app.get('/', (req: Request, res: Response) => {
   res.json({ success: true, message: 'Backend is running successfully', port });

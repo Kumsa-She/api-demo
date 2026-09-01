@@ -22,3 +22,12 @@ pnpm-debug.log*
 coverage/
 dist/
 build/
+
+# VS Code agent customizations
+.github/agents/
+
+uploads/
+*.png
+*.jpg
+*.jpeg
+*.webp
