@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import { ObjectId } from 'mongodb';
 import database from '../config/db';
 import { Product, getProductCollection } from '../models/Product';
 
@@ -64,4 +65,46 @@ const getAllProducts = async (req: Request, res: Response): Promise<void> => {
   }
 };
 
-export { createProduct, getAllProducts };
+const getProductById = async (req: Request, res: Response): Promise<void> => {
+  const { id } = req.params;
+
+  if (
+    typeof id !== 'string' ||
+    !/^[0-9a-fA-F]{24}$/.test(id) ||
+    !ObjectId.isValid(id)
+  ) {
+    res.status(400).json({ success: false, error: 'invalid product id' });
+    return;
+  }
+
+  try {
+    const db = await database.connectToDatabase();
+    const product = await getProductCollection(db).findOne(
+      { _id: new ObjectId(id) },
+      {
+        projection: {
+          _id: 1,
+          name: 1,
+          price: 1,
+          category: 1,
+          stock: 1,
+          description: 1,
+          imageUrl: 1,
+          createdAt: 1,
+        },
+      },
+    );
+
+    if (!product) {
+      res.status(404).json({ success: false, error: 'product not found' });
+      return;
+    }
+
+    res.status(200).json({ success: true, data: product });
+  } catch (error) {
+    console.log('Fetching product failed', error);
+    res.status(500).json({ success: false, error: 'server error' });
+  }
+};
+
+export { createProduct, getAllProducts, getProductById };
