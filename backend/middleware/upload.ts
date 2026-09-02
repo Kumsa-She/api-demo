@@ -1,5 +1,6 @@
 import multer from 'multer';
 import path from 'path';
+import { NextFunction, Request, Response } from 'express';
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -13,7 +14,7 @@ const storage = multer.diskStorage({
 });
 
 const fileFilter = (
-  req: Express.Request,
+  req: Request,
   file: Express.Multer.File,
   cb: multer.FileFilterCallback,
 ): void => {
@@ -35,9 +36,9 @@ const upload = multer({
 
 const handleUploadError = (
   error: unknown,
-  req: Express.Request,
-  res: Express.Response,
-  next: Express.NextFunction,
+  req: Request,
+  res: Response,
+  next: NextFunction,
 ): void => {
   const err = error as any;
   if (err?.code === 'LIMIT_FILE_SIZE') {
@@ -51,12 +52,10 @@ const handleUploadError = (
     return;
   }
   if (err?.code === 'LIMIT_UNEXPECTED_FILE') {
-    res
-      .status(400)
-      .json({
-        success: false,
-        error: 'Unexpected field. Use "image" field for file.',
-      });
+    res.status(400).json({
+      success: false,
+      error: 'Unexpected field. Use "image" field for file.',
+    });
     return;
   }
   next(error);
