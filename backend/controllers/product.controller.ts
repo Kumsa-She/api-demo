@@ -26,4 +26,42 @@ const createProduct = async (req: Request, res: Response): Promise<void> => {
   }
 };
 
-export { createProduct };
+const getAllProducts = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const db = await database.connectToDatabase();
+    const products = await getProductCollection(db)
+      .find(
+        {},
+        {
+          projection: {
+            _id: 1,
+            name: 1,
+            price: 1,
+            category: 1,
+            stock: 1,
+            description: 1,
+            imageUrl: 1,
+            createdAt: 1,
+          },
+        },
+      )
+      .sort({ createdAt: -1 })
+      .toArray();
+
+    if (products.length === 0) {
+      res.status(404).json({ success: false, error: 'no products found' });
+      return;
+    }
+
+    res.status(200).json({
+      success: true,
+      data: products,
+      count: products.length,
+    });
+  } catch (error) {
+    console.log('Fetching products failed', error);
+    res.status(500).json({ success: false, error: 'server error' });
+  }
+};
+
+export { createProduct, getAllProducts };
