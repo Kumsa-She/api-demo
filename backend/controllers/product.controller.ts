@@ -216,4 +216,40 @@ const updateProduct = async (req: Request, res: Response): Promise<void> => {
   }
 };
 
-export { createProduct, getAllProducts, getProductById, updateProduct };
+const deleteProduct = async (req: Request, res: Response): Promise<void> => {
+  const { id } = req.params;
+
+  if (
+    typeof id !== 'string' ||
+    !/^[0-9a-fA-F]{24}$/.test(id) ||
+    !ObjectId.isValid(id)
+  ) {
+    res.status(400).json({ success: false, error: 'invalid product id' });
+    return;
+  }
+
+  try {
+    const db = await database.connectToDatabase();
+    const product = await getProductCollection(db).findOneAndDelete({
+      _id: new ObjectId(id),
+    });
+
+    if (!product) {
+      res.status(404).json({ success: false, error: 'product not found' });
+      return;
+    }
+
+    res.status(200).json({ success: true, data: product });
+  } catch (error) {
+    console.log('Deleting product failed', error);
+    res.status(500).json({ success: false, error: 'server error' });
+  }
+};
+
+export {
+  createProduct,
+  getAllProducts,
+  getProductById,
+  updateProduct,
+  deleteProduct,
+};
