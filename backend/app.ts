@@ -36,4 +36,8 @@ app.get('/health', async (req: Request, res: Response) => {
     .json({ status: healthy ? 'ok' : 'unhealthy' });
 });
 
+app.use('/api', (req: Request, res: Response) => {
+  res.status(404).json({ success: false, error: 'endpoint not found' });
+});
+
 export { app, port };
