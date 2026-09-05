@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 import rateLimit from 'express-rate-limit';
 import { healthCheck } from './config/db';
 import productRouter from './routes/product.routes';
+import errorRouter from './routes/error.routes';
 
 dotenv.config();
 
@@ -21,6 +22,7 @@ app.use(
   }),
 );
 app.use('/api/products', productRouter);
+app.use('/api/error', errorRouter);
 
 app.get('/', (req: Request, res: Response) => {
   res.json({ success: true, message: 'Backend is running successfully', port });
