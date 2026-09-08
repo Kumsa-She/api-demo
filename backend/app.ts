@@ -2,6 +2,7 @@ import express, { Request, Response } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import rateLimit from 'express-rate-limit';
+import path from 'path';
 import { healthCheck } from './config/db';
 import productRouter from './routes/product.routes';
 import errorRouter from './routes/error.routes';
@@ -23,6 +24,21 @@ app.use(
 );
 app.use('/api/products', productRouter);
 app.use('/api/error', errorRouter);
+
+const uploadsDirectory = path.join(__dirname, 'uploads');
+const allowedImageExtensions = ['.jpg', '.jpeg', '.png', '.webp'];
+
+app.use('/uploads', (req: Request, res: Response, next) => {
+  if (!allowedImageExtensions.includes(path.extname(req.path).toLowerCase())) {
+    res.status(404).json({ success: false, error: 'file not found' });
+    return;
+  }
+  next();
+});
+app.use('/uploads', express.static(uploadsDirectory));
+app.use('/uploads', (req: Request, res: Response) => {
+  res.status(404).json({ success: false, error: 'file not found' });
+});
 
 app.get('/', (req: Request, res: Response) => {
   res.json({ success: true, message: 'Backend is running successfully', port });
