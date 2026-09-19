@@ -24,7 +24,7 @@ type NativeButtonProps = SharedProps & {
 type ButtonProps = ButtonLinkProps | NativeButtonProps;
 
 const baseClasses =
-  'inline-flex items-center justify-center gap-2 rounded-lg px-7 py-3.5 font-semibold transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-[#010409] disabled:cursor-not-allowed disabled:opacity-50';
+  'inline-flex items-center justify-center gap-2 rounded-lg px-7 py-3.5 text-base font-semibold transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-[#010409] disabled:cursor-not-allowed disabled:opacity-50';
 
 const variantClasses: Record<ButtonVariant, string> = {
   primary:

@@ -8,7 +8,11 @@ export default function Footer() {
       <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-6 text-sm text-gray-600 sm:flex-row sm:items-center sm:justify-between dark:text-slate-400">
         <nav className="flex flex-wrap gap-x-4 gap-y-2">
           {footerLinks.map((link) => (
-            <Link key={link} to={link === 'Home' ? '/' : '#'}>
+            <Link
+              className="text-sm font-medium"
+              key={link}
+              to={link === 'Home' ? '/' : '#'}
+            >
               {link}
             </Link>
           ))}
