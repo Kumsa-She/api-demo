@@ -4,6 +4,7 @@ import { ThemeProvider } from './context/ThemeContext';
 import Home from './pages/Home';
 import Explorer from './pages/Explorer';
 import Challenges from './pages/Challenges';
+import ChallengeDetail from './pages/ChallengeDetail';
 import Docs from './pages/Docs';
 
 function App() {
@@ -15,6 +16,7 @@ function App() {
             <Route element={<Home />} path="/" />
             <Route element={<Explorer />} path="/explorer" />
             <Route element={<Challenges />} path="/challenges" />
+            <Route element={<ChallengeDetail />} path="/challenges/:id" />
             <Route element={<Docs />} path="/docs" />
           </Routes>
         </Layout>

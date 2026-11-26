@@ -1,0 +1,65 @@
+import type { Challenge } from './types';
+
+export const CHALLENGES: Challenge[] = [
+  {
+    id: 'create-product',
+    title: 'Create a product',
+    difficulty: 'easy',
+    description: 'Add a new product to the catalog.',
+    hint: 'Send a JSON body with the product details.',
+    endpoint: { method: 'POST', path: '/api/products' },
+    expectedRequest: {
+      headers: { 'Content-Type': 'application/json' },
+      body: {
+        name: 'Wireless Keyboard',
+        price: 79.99,
+        category: 'Accessories',
+        stock: 25,
+      },
+    },
+    expectedStatus: 201,
+  },
+  {
+    id: 'list-products',
+    title: 'List products',
+    difficulty: 'easy',
+    description: 'Fetch the product catalog.',
+    hint: 'Make a GET request to the products collection.',
+    endpoint: { method: 'GET', path: '/api/products' },
+    expectedRequest: {},
+    expectedStatus: 200,
+  },
+  {
+    id: 'update-product',
+    title: 'Update a product',
+    difficulty: 'medium',
+    description: 'Change a product in the catalog.',
+    hint: 'Use a product ID in the path and send a JSON body.',
+    endpoint: { method: 'PUT', path: '/api/products/:id' },
+    expectedRequest: {
+      headers: { 'Content-Type': 'application/json' },
+      body: { price: 89.99 },
+    },
+    expectedStatus: 200,
+  },
+  {
+    id: 'delete-product',
+    title: 'Delete a product',
+    difficulty: 'medium',
+    description: 'Remove a product from the catalog.',
+    hint: 'Use the product ID in the endpoint path.',
+    endpoint: { method: 'DELETE', path: '/api/products/:id' },
+    expectedRequest: {},
+    expectedStatus: 200,
+  },
+  {
+    id: 'trigger-not-found',
+    title: 'Trigger a not-found response',
+    difficulty: 'hard',
+    description: 'Request a product ID that does not exist.',
+    hint: 'Try a made-up ID in the product detail path.',
+    endpoint: { method: 'GET', path: '/api/products/:id' },
+    expectedRequest: {},
+    expectedStatus: 404,
+  },
+];
